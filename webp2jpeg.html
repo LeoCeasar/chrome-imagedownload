@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>WEBP 转 JPEG 下载</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 14px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .row {
+      margin-bottom: 16px;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #555;
+    }
+    #preview {
+      margin-top: 16px;
+      max-width: 100%;
+      border: 1px solid #eee;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>WEBP 在线转 JPEG</h1>
+
+  <div class="row">
+    <label for="urlInput">WEBP 图片 URL：</label>
+    <input
+      type="text"
+      id="urlInput"
+      placeholder="例如：https://example.com/image.webp"
+    />
+  </div>
+
+  <div class="row">
+    <label for="filenameInput">保存文件名（可选，不要后缀）：</label>
+    <input
+      type="text"
+      id="filenameInput"
+      placeholder="默认为 converted"
+    />
+  </div>
+
+  <button id="convertBtn">转换并下载 JPEG</button>
+
+  <div id="status"></div>
+
+  <img id="preview" alt="转换后的预览（JPEG）" />
+
+  <!-- 隐藏画布用于转换 -->
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    const urlInput = document.getElementById("urlInput");
+    const filenameInput = document.getElementById("filenameInput");
+    const convertBtn = document.getElementById("convertBtn");
+    const statusEl = document.getElementById("status");
+    const canvas = document.getElementById("canvas");
+    const preview = document.getElementById("preview");
+
+    function setStatus(msg, isError = false) {
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? "red" : "#555";
+    }
+
+    convertBtn.addEventListener("click", async () => {
+      const url = urlInput.value.trim();
+      if (!url) {
+        setStatus("请先输入 WEBP 图片 URL", true);
+        return;
+      }
+
+      setStatus("正在加载图片并转换，请稍候...");
+      preview.style.display = "none";
+
+      try {
+        // 加载图片
+        const img = new Image();
+        // 尝试跨域加载（需要图片服务器允许 CORS）
+        img.crossOrigin = "anonymous";
+        img.src = url;
+
+        await new Promise((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("图片加载失败，请检查 URL 是否正确，以及是否允许跨域访问。"));
+        });
+
+        // 画到 canvas 上
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+
+        if (!w || !h) {
+          throw new Error("无法获取图片尺寸，可能不是合法的图片。");
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0);
+
+        // 从 canvas 导出 JPEG（质量 0.92，可按需调整）
+        const jpegDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+
+        // 预览
+        preview.src = jpegDataUrl;
+        preview.style.display = "block";
+
+        // 自动触发下载
+        const a = document.createElement("a");
+        const filenameBase = filenameInput.value.trim() || "converted";
+        a.href = jpegDataUrl;
+        a.download = filenameBase + ".jpeg";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setStatus("转换完成，JPEG 已开始下载。");
+      } catch (err) {
+        console.error(err);
+        setStatus("转换失败：" + err.message, true);
+      }
+    });
+  </script>
+</body>
+</html>

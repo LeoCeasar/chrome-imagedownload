@@ -1,0 +1,99 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Media Sidebar</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+      html, body { width: auto; min-width: 320px; overflow-x: hidden; }
+      /* 仅作用于侧边栏根，避免影响悬浮预览 */
+      .sp-root .kind { font-size: 11px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 10px; display: inline-block; color: var(--muted); }
+      .sp-root .row { display:flex; align-items:center; gap:8px; }
+      .sp-root .controls { position: sticky; top: 0; background: var(--bg); z-index: 10; }
+      /* 覆盖网格为列表显示 */
+      .sp-root .image-list { display: block; }
+      .sp-root .image-list .card { display: grid; grid-template-columns: 18px 1fr; }
+      .sp-root .thumb-wrap { display: grid; grid-template-columns: 140px 1fr; column-gap: 8px; grid-template-areas: 'thumb row' 'thumb name' 'thumb meta'; align-items: start; }
+      .sp-root .thumb { grid-area: thumb; width: 140px; height: 100px; }
+      .sp-root .row { grid-area: row; }
+      .sp-root .name { grid-area: name; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sp-root .meta { grid-area: meta; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sp-root .dim-badge { right: auto; left: 6px; }
+      /* 确保悬浮预览的层级与布局不受影响 */
+      .preview-box { position: fixed; z-index: 9999; }
+    </style>
+  </head>
+  <body class="sp-root">
+    <header>
+      <h1>媒体侧边栏</h1>
+    </header>
+
+    <section class="controls">
+      <div class="format">
+        <label><input type="radio" name="format" value="original" checked> 保留原格式</label>
+        <label><input type="radio" name="format" value="jpeg"> 转换为 JPEG</label>
+        <span class="quality" id="qualityRow" hidden>
+          质量: <input type="range" id="quality" min="0.1" max="1" step="0.05" value="0.92"> <span id="qualityVal">0.92</span>
+        </span>
+      </div>
+      <div class="thumb-fit">
+        缩略图适配：
+        <select id="fitMode">
+          <option value="contain" selected>完整显示</option>
+          <option value="cover">裁剪填充</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn">手动更新</button>
+        <button id="selectAllBtn">全选</button>
+        <button id="clearBtn">清空</button>
+        <button id="downloadBtn" class="primary">下载所选</button>
+      </div>
+      <div id="payBar" class="pay-bar" hidden>
+        <span id="quotaText">免费额度：今日剩余 0 张</span>
+        <span class="spacer"></span>
+        <button id="buyBtn" title="解锁无限下载">解锁</button>
+        <button id="refreshLicenseBtn" title="我已购买，刷新授权">刷新授权</button>
+      </div>
+      <div class="thumb-fit">
+        预览设置：
+        <label><input type="checkbox" id="previewEnabled" checked> 启用悬浮预览</label>
+        <span style="margin-left:8px;">大小：</span>
+        <select id="previewSize">
+          <option value="sm">小</option>
+          <option value="md" selected>中</option>
+          <option value="lg">大</option>
+        </select>
+        <span style="margin-left:8px;">延迟(ms)：</span>
+        <input id="previewDelay" type="number" min="0" max="2000" step="50" value="200" style="width:80px;" />
+        <label style="margin-left:8px;"><input type="checkbox" id="previewSticky"> 点击固定预览</label>
+      </div>
+      <div class="filters">
+        <label>类型：
+          <select id="filterType">
+            <option value="all" selected>全部</option>
+            <option value="image">仅图片</option>
+            <option value="video">仅视频</option>
+          </select>
+        </label>
+        <label>域筛选：<input id="filterDomain" placeholder="包含的域或子串" /></label>
+        <label>搜索：<input id="filterQuery" placeholder="按文件名/URL 过滤" /></label>
+      </div>
+    </section>
+
+    <section class="list">
+      <div id="status" class="status">等待数据...</div>
+      <ul id="mediaList" class="image-list"></ul>
+    </section>
+
+    <footer>
+      <small>实时更新当前标签页中的图片与视频</small>
+    </footer>
+
+    <!-- Optional: vendor extpay js if available -->
+    <script src="src/extpay.js"></script>
+    <script src="src/pay.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+  </html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>支付说明</title>
+    <style>
+      body { font: 14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial; padding: 24px; color: #111; }
+      .box { max-width: 720px; margin: 0 auto; }
+      h1 { font-size: 20px; margin: 0 0 12px; }
+      p { margin: 0 0 10px; }
+      code { background: #f2f4f7; padding: 2px 4px; border-radius: 4px; }
+      a { color: #0b72ff; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>支付模块未集成</h1>
+      <p>当前使用的是本地 <code>ExtPay</code> 占位实现（stub），用于开发调试。</p>
+      <p>要启用真实支付，请将 <code>src/extpay.js</code> 替换为官方 ExtPay 库，并确保在后台脚本中调用 <code>extpay.startBackground()</code>。</p>
+      <p>完成集成后，返回扩展弹窗中的“解锁”按钮即可打开支付页面。</p>
+      <p>参考文档（外部链接）：<a href="https://extensionpay.com/docs/" target="_blank" rel="noreferrer">ExtPay 文档</a></p>
+    </div>
+  </body>
+  </html>
+
