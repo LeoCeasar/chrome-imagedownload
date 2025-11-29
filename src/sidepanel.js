@@ -366,14 +366,33 @@ function ensurePreviewLayer(size = 'md') {
   close.className = 'preview-close';
   close.textContent = '关闭';
   head.appendChild(title); head.appendChild(close);
-  const list = document.createElement('div');
-  list.className = 'preview-list';
+  const img = document.createElement('img');
+  const video = document.createElement('video');
+  video.muted = true; video.controls = true; video.preload = 'metadata';
+  const meta = document.createElement('div');
+  meta.className = 'preview-meta';
   box.appendChild(head);
-  box.appendChild(list);
+  box.appendChild(img);
+  box.appendChild(video);
+  box.appendChild(meta);
   document.body.appendChild(box);
-  previewLayer = { box, list, close };
+  previewLayer = { box, img, video, meta, close };
   setPreviewSize(size);
   close.addEventListener('click', () => pinPreview(false));
+  img.addEventListener('load', () => {
+    const dims = img.naturalWidth && img.naturalHeight ? `${img.naturalWidth}×${img.naturalHeight}` : '';
+    if (previewLayer.currentItem) {
+      const info = metaCache.get(previewLayer.currentItem.url) || {};
+      setPreviewMeta(previewLayer, previewLayer.currentItem, info, dims);
+    }
+  });
+  video.addEventListener('loadedmetadata', () => {
+    const dims = (video.videoWidth && video.videoHeight) ? `${video.videoWidth}×${video.videoHeight}` : '';
+    if (previewLayer.currentItem) {
+      const info = metaCache.get(previewLayer.currentItem.url) || {};
+      setPreviewMeta(previewLayer, previewLayer.currentItem, info, dims);
+    }
+  });
   return previewLayer;
 }
 
@@ -391,7 +410,18 @@ function attachHoverPreview(el, item) {
     const delay = Number(pd?.value || 0);
     timer = setTimeout(() => {
       active = true;
-      renderPreviewList(currentMedia);
+      if (item.kind === 'video') {
+        layer.video.style.display = 'block';
+        layer.img.style.display = 'none';
+        layer.video.src = item.url;
+      } else {
+        layer.img.style.display = 'block';
+        layer.video.style.display = 'none';
+        layer.img.src = item.url;
+      }
+      previewLayer.currentItem = item;
+      setPreviewMeta(layer, item, {});
+      fetchMetaFor(item).then(info => { if (active) setPreviewMeta(layer, item, info || {}); }).catch(()=>{});
       layer.box.style.display = 'block';
       move(e);
     }, Math.max(0, delay));
@@ -413,18 +443,32 @@ function attachHoverPreview(el, item) {
     if (previewState.pinned) return; // 固定时不隐藏
     active = false;
     layer.box.style.display = 'none';
-    layer.list.innerHTML = '';
+    layer.img.removeAttribute('src');
+    layer.video.pause();
+    layer.video.removeAttribute('src');
+    layer.meta.textContent = '';
   }
   function click() {
     if (!pk || !pk.checked) return;
     if (!previewState.pinned) {
       previewState.pinned = true;
-      previewState.url = 'all';
+      previewState.url = item.url;
       layer.box.classList.add('pinned');
       layer.box.style.display = 'block';
     } else {
-      if (previewState.url === 'all') {
+      if (previewState.url === item.url) {
         pinPreview(false);
+      } else {
+        previewState.url = item.url;
+        if (item.kind === 'video') {
+          layer.video.style.display = 'block';
+          layer.img.style.display = 'none';
+          layer.video.src = item.url;
+        } else {
+          layer.img.style.display = 'block';
+          layer.video.style.display = 'none';
+          layer.img.src = item.url;
+        }
       }
     }
   }
