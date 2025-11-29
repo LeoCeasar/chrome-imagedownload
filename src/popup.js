@@ -349,14 +349,23 @@ function ensurePreviewLayer(size = 'md') {
   close.className = 'preview-close';
   close.textContent = '关闭';
   head.appendChild(title); head.appendChild(close);
-  const list = document.createElement('div');
-  list.className = 'preview-list';
+  const img = document.createElement('img');
+  const meta = document.createElement('div');
+  meta.className = 'preview-meta';
   box.appendChild(head);
-  box.appendChild(list);
+  box.appendChild(img);
+  box.appendChild(meta);
   document.body.appendChild(box);
-  previewLayer = { box, list, close };
+  previewLayer = { box, img, meta, close };
   setPreviewSize(size);
   close.addEventListener('click', () => pinPreview(false));
+  img.addEventListener('load', () => {
+    const dims = img.naturalWidth && img.naturalHeight ? `${img.naturalWidth}×${img.naturalHeight}` : '';
+    if (previewLayer.currentItem) {
+      const info = metaCache.get(previewLayer.currentItem.url) || {};
+      setPreviewMeta(previewLayer, previewLayer.currentItem, info, dims);
+    }
+  });
   return previewLayer;
 }
 
@@ -374,7 +383,10 @@ function attachHoverPreview(el, item) {
     const delay = Number(pd?.value || 0);
     timer = setTimeout(() => {
       active = true;
-      renderPreviewList(currentImages);
+      layer.img.src = item.url;
+      previewLayer.currentItem = item;
+      setPreviewMeta(layer, item, {});
+      fetchMetaFor(item).then(info => { if (active) setPreviewMeta(layer, item, info || {}); }).catch(()=>{});
       layer.box.style.display = 'block';
       move(e);
     }, Math.max(0, delay));
@@ -396,20 +408,24 @@ function attachHoverPreview(el, item) {
     if (previewState.pinned) return; // 固定时不隐藏
     active = false;
     layer.box.style.display = 'none';
-    layer.list.innerHTML = '';
+    layer.img.removeAttribute('src');
+    layer.meta.textContent = '';
   }
   function click() {
     if (!pk || !pk.checked) return;
     if (!previewState.pinned) {
       // 进入固定模式
       previewState.pinned = true;
-      previewState.url = 'all';
+      previewState.url = item.url;
       layer.box.classList.add('pinned');
       layer.box.style.display = 'block';
     } else {
       // 如果再次点击则取消固定
-      if (previewState.url === 'all') {
+      if (previewState.url === item.url) {
         pinPreview(false);
+      } else {
+        previewState.url = item.url;
+        layer.img.src = item.url;
       }
     }
   }
@@ -427,7 +443,8 @@ function pinPreview(flag) {
     previewState.url = null;
     layer.box.classList.remove('pinned');
     layer.box.style.display = 'none';
-    layer.list.innerHTML = '';
+    layer.img.removeAttribute('src');
+    layer.meta.textContent = '';
   } else {
     layer.box.classList.add('pinned');
   }
@@ -444,23 +461,34 @@ function setPreviewSize(size) {
   previewLayer.box.classList.add(`preview-${size}`);
 }
 
-// Render all images into the preview list (one per row)
-function renderPreviewList(images) {
-  const layer = ensurePreviewLayer();
-  const list = layer.list;
-  list.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  (images || []).forEach(img => {
-    const row = document.createElement('div');
-    row.className = 'preview-entry';
-    const el = document.createElement('img');
-    el.src = img.url;
-    el.referrerPolicy = 'no-referrer';
-    el.loading = 'lazy';
-    row.appendChild(el);
-    frag.appendChild(row);
-  });
-  list.appendChild(frag);
+const metaCache = new Map(); // url -> {type,size}
+async function fetchMetaFor(item) {
+  const key = item.url;
+  if (metaCache.has(key)) return metaCache.get(key);
+  try {
+    const res = await fetch(key, { method: 'HEAD' });
+    const type = res.headers.get('content-type') || '';
+    const len = res.headers.get('content-length');
+    const size = len ? formatBytes(Number(len)) : '';
+    const info = { type, size };
+    metaCache.set(key, info);
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+function setPreviewMeta(layer, item, info, dims='') {
+  const parts = [];
+  const fname = filenameFromUrl(item.url);
+  if (fname) parts.push(fname);
+  if (!dims && layer.img && layer.img.naturalWidth && layer.img.naturalHeight) {
+    dims = `${layer.img.naturalWidth}×${layer.img.naturalHeight}`;
+  }
+  if (dims) parts.push(dims);
+  if (info && info.type) parts.push(info.type);
+  if (info && info.size) parts.push(info.size);
+  layer.meta.textContent = parts.join(' · ');
 }
 
 function formatBytes(bytes) {
