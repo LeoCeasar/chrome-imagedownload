@@ -42,7 +42,7 @@ button:disabled { opacity: 0.6; cursor: default; }
   list-style: none;
   padding: 0;
   margin: 0;
-  display: block; /* 列表显示：一行一项 */
+  display: block; /* 列表显示：一行一个 */
   overflow-x: hidden; /* 禁止横向滚动 */
 }
 
@@ -77,8 +77,9 @@ button:disabled { opacity: 0.6; cursor: default; }
 .meta { display: none; }
 .name { color: var(--text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* 列表模式：左图右名称 */
-.image-list .card { grid-template-columns: 18px 1fr; }
+/* 列表模式：左图右名称，参考侧边栏布局 */
+.image-list .card { display: grid; grid-template-columns: 18px 1fr; }
+
 .image-list .thumb-wrap {
   display: grid;
   grid-template-columns: 140px 1fr; /* 左缩略图，右文本 */
@@ -127,8 +128,14 @@ footer { padding: 8px 12px; color: var(--muted); border-top: 1px solid var(--bor
 .preview-box.pinned { pointer-events: auto; }
 .preview-head { display:flex; align-items:center; justify-content: space-between; gap:8px; margin-bottom:6px; color: var(--muted); font-size:12px; }
 .preview-close { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
-/* Base styling for legacy img/video kept minimal; list will override */
-.preview-box img, .preview-box video { display: block; background: #0a0f15; border-radius: 4px; }
+/* 预览中的媒体尺寸适配容器 */
+.preview-box img, .preview-box video {
+  display: block;
+  background: #0a0f15;
+  border-radius: 4px;
+  max-width: 100%;
+  height: auto;
+}
 
 /* 预览尺寸：小/中/大 */
 /* List-style preview: container sizes by class; no horizontal scroll */
