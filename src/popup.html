@@ -68,6 +68,8 @@
     </footer>
 
     <!-- Optional: vendor extpay js if available -->
+    <!-- Load config first so pay.js can read EXTPAY_ID -->
+    <script src="config.js"></script>
     <!-- Paths are relative to this HTML (in src/), so load sibling files without 'src/' prefix -->
     <script src="extpay.js"></script>
     <script src="pay.js"></script>

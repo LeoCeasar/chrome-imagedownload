@@ -1,7 +1,9 @@
 // Simple pay/quota helper used by popup and sidepanel
 // Requires (optional) global ExtPay loaded from src/extpay.js
 (function () {
-  const EXT_ID = 'od-image-downloader';
+  const EXT_ID = (typeof window !== 'undefined' && window.APP_CONFIG && window.APP_CONFIG.EXTPAY_ID)
+    || (typeof self !== 'undefined' && self.APP_CONFIG && self.APP_CONFIG.EXTPAY_ID)
+    || 'od-image-downloader';
   const FREE_DAILY_LIMIT = 5; // 免费每天5张图片
 
   let _extpay = null;

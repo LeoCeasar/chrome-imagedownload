@@ -59,6 +59,20 @@
 - `host_permissions: <all_urls>`：允许扩展从任意域跨源获取图片数据（在 JPEG 转换时通过 `fetch` 拉取原图）。
 - `sidePanel`：用于打开和控制 Chrome 侧边栏。
 
+## 支付（ExtPay）集成
+- 文件结构：
+  - `src/config.js`：配置 `APP_CONFIG.EXTPAY_ID`（ExtPay 项目 ID）。
+  - `src/extpay.js`：ExtPay 库文件。当前仓库自带的是占位 stub，发布前请替换为官方 `extpay.min.js` 并重命名为 `extpay.js`。
+  - `src/background.js`：在 Service Worker 中 `importScripts('config.js','extpay.js')` 并调用 `extpay.startBackground()`。
+  - `src/popup.html` / `src/sidepanel.html`：确保按顺序加载 `config.js` -> `extpay.js` -> `pay.js`。
+- 步骤：
+  1. 在 ExtensionPay 后台创建项目，获取项目 ID（建议使用你的扩展固定 ID）。
+  2. 固定扩展 ID：在 `manifest.json` 增加 `key`，保证开发环境与后台配置的 ID 一致；或使用商店安装版测试。
+  3. 将官方 `extpay.min.js` 复制到 `src/`，重命名为 `extpay.js` 覆盖仓库内的占位文件。
+  4. 在 `src/config.js` 中将 `EXTPAY_ID` 设置为你的项目 ID。
+  5. 重新加载扩展。未付费时弹窗/侧边栏会显示“免费额度”条，点击“解锁”打开支付页面；完成支付后 `getUser()` 返回 `paid: true`，额度限制解除。
+- 日额度：默认每天免费 5 张（可在 `src/pay.js` 中调整 `FREE_DAILY_LIMIT`）。
+
 ## 实现说明
 - Manifest V3：
   - `content_scripts`（`src/content-script.js`）负责在页面中扫描图片/视频链接；同时使用 `MutationObserver` + Port 长连接向侧边栏实时推送。

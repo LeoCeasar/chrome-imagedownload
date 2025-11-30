@@ -1,14 +1,14 @@
 // Background service worker for ExtPay (MV3)
-// Note: extpay.js must be available at src/extpay.js
+// Loads config + ExtPay and starts background messaging channel.
 try {
-  // importScripts is supported in MV3 service worker when not using type:module
-  // Path is relative to this file (src/background.js)
-  // So we load sibling file as 'extpay.js', not 'src/extpay.js'
-  importScripts('extpay.js');
-  if (typeof ExtPay === 'function') {
-    const extpay = ExtPay('od-image-downloader');
-    // Initializes messaging required by ExtPay across extension contexts
+  // Ensure config is present first, then load extpay library (or stub)
+  importScripts('config.js', 'extpay.js');
+  if (typeof ExtPay === 'function' && self.APP_CONFIG && self.APP_CONFIG.EXTPAY_ID) {
+    const extpay = ExtPay(self.APP_CONFIG.EXTPAY_ID);
     extpay.startBackground();
+    console.info('[ExtPay] background started with project:', self.APP_CONFIG.EXTPAY_ID);
+  } else {
+    console.warn('[ExtPay] not initialized: library or config missing');
   }
 } catch (e) {
   // Fallback: background will still run without ExtPay library present
