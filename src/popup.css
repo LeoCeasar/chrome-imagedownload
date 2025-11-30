@@ -52,7 +52,7 @@ button:disabled { opacity: 0.6; cursor: default; }
   border-radius: 8px;
   padding: 8px;
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 18px 1fr; /* 勾选框 + 内容 */
   gap: 8px;
   align-items: start;
 }
@@ -79,6 +79,7 @@ button:disabled { opacity: 0.6; cursor: default; }
 
 /* 列表模式：左图右名称，参考侧边栏布局 */
 .image-list .card { display: grid; grid-template-columns: 18px 1fr; }
+
 .image-list .thumb-wrap {
   display: grid;
   grid-template-columns: 140px 1fr; /* 左缩略图，右文本 */

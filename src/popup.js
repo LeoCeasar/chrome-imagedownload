@@ -421,6 +421,7 @@ function attachHoverPreview(el, item) {
       layer.box.style.display = 'block';
     } else {
       // 如果点击同一张，则取消固定；否则切换
+
       if (previewState.url === item.url) {
         pinPreview(false);
       } else {
