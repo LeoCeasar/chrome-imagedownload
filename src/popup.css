@@ -42,10 +42,8 @@ button:disabled { opacity: 0.6; cursor: default; }
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  overflow-x: hidden;
+  display: block; /* 列表显示：一行一个 */
+  overflow-x: hidden; /* 禁止横向滚动 */
 }
 
 .card {
@@ -62,7 +60,7 @@ button:disabled { opacity: 0.6; cursor: default; }
 .thumb-wrap { position: relative; }
 .thumb {
   width: 100%;
-  height: 110px;
+  height: 100px;
   object-fit: contain; /* 默认完整显示 */
   background: #0a0f15;
   border-radius: 4px;
@@ -76,8 +74,24 @@ button:disabled { opacity: 0.6; cursor: default; }
 .thumb-fit { margin-top: 6px; color: var(--muted); }
 .thumb-fit select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
 
-.meta { font-size: 12px; color: var(--muted); margin-top: 6px; word-break: break-word; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.name { color: var(--text); font-size: 12px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { display: none; }
+.name { color: var(--text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 列表模式：左图右名称，参考侧边栏布局 */
+.image-list .card { display: grid; grid-template-columns: 18px 1fr; }
+.image-list .thumb-wrap {
+  display: grid;
+  grid-template-columns: 140px 1fr; /* 左缩略图，右文本 */
+  column-gap: 8px;
+  grid-template-areas:
+    'thumb name'
+    'thumb meta';
+  align-items: start;
+}
+.image-list .thumb { grid-area: thumb; width: 140px; height: 100px; }
+.image-list .name { grid-area: name; }
+.image-list .meta { grid-area: meta; }
+.image-list .dim-badge { right: auto; left: 6px; }
 
 footer { padding: 8px 12px; color: var(--muted); border-top: 1px solid var(--border); }
 
@@ -113,8 +127,14 @@ footer { padding: 8px 12px; color: var(--muted); border-top: 1px solid var(--bor
 .preview-box.pinned { pointer-events: auto; }
 .preview-head { display:flex; align-items:center; justify-content: space-between; gap:8px; margin-bottom:6px; color: var(--muted); font-size:12px; }
 .preview-close { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
-/* Base styling for legacy img/video kept minimal; list will override */
-.preview-box img, .preview-box video { display: block; background: #0a0f15; border-radius: 4px; }
+/* 预览中的媒体尺寸适配容器 */
+.preview-box img, .preview-box video {
+  display: block;
+  background: #0a0f15;
+  border-radius: 4px;
+  max-width: 100%;
+  height: auto;
+}
 
 /* 预览尺寸：小/中/大 */
 /* List-style preview: container sizes by class; no horizontal scroll */
