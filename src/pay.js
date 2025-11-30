@@ -61,6 +61,26 @@
     }
   }
 
+  async function broadcastLicenseChanged(user) {
+    try { chrome.runtime?.sendMessage?.({ type: 'LICENSE_CHANGED', user: user || null }); } catch {}
+    try { await chrome.storage?.local?.set?.({ licensePaid: !!(user && user.paid), licenseUpdatedAt: Date.now() }); } catch {}
+  }
+
+  async function pollForPayment(timeoutMs = 180000, intervalMs = 3000) {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    while (Date.now() < deadline) {
+      try {
+        const user = await getUser();
+        if (user && user.paid) {
+          await broadcastLicenseChanged(user);
+          return true;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, Math.max(500, intervalMs)));
+    }
+    return false;
+  }
+
   function openPaymentPage() {
     // If stub, open local info page to provide visible feedback
     if (_extpay && _extpay.__isStub) {
@@ -69,7 +89,12 @@
       return;
     }
     if (_extpay && _extpay.openPaymentPage) {
-      try { _extpay.openPaymentPage(); } catch {}
+      try {
+        _extpay.openPaymentPage();
+        // Start a background poll to detect paid status while user completes checkout
+        // Fire and forget; UI can also click "刷新授权" to force immediate check
+        pollForPayment().catch(()=>{});
+      } catch {}
       return;
     }
     alert('支付模块暂不可用，请稍后再试');
@@ -78,6 +103,7 @@
   window.PAY = {
     getUser,
     openPaymentPage,
+    pollForPayment,
     getRemainingDailyQuota,
     consumeQuota,
     FREE_DAILY_LIMIT

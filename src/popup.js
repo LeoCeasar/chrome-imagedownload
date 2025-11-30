@@ -331,8 +331,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // wire pay bar actions
   document.getElementById('buyBtn')?.addEventListener('click', () => window.PAY?.openPaymentPage?.());
   document.getElementById('refreshLicenseBtn')?.addEventListener('click', async () => {
-    try { await refreshPayUI(true); } catch {}
+    try {
+      // Try a short poll to catch freshly-activated purchases
+      await (window.PAY?.pollForPayment?.(60000, 2000) || Promise.resolve());
+      await refreshPayUI(true);
+    } catch {}
   });
+  // React to license changes broadcast by PAY
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === 'LICENSE_CHANGED') {
+        refreshPayUI(true).catch(()=>{});
+      }
+    });
+  } catch {}
 });
 
 // ---------- 悬浮预览逻辑（图片） ----------
