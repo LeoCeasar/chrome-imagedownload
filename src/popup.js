@@ -209,19 +209,17 @@ async function onDownloadClicked() {
   status.textContent = `开始下载（共 ${urls.length}）...`;
   document.getElementById('downloadBtn').disabled = true;
 
-  // Paywall: check user and free quota
-  let user = null;
-  let paid = false;
-  try { user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false })); } catch {}
-  paid = !!(user && user.paid);
-  let remaining = paid ? Infinity : await (window.PAY?.getRemainingDailyQuota?.() || 0);
-
   for (const url of urls) {
     try {
-      // Enforce daily free limit for non-paid users
-      if (!paid && remaining <= 0) {
-        status.textContent = `免费额度已用完（每天 ${window.PAY?.FREE_DAILY_LIMIT || 5} 张）。`;
-        break;
+      // Check permission each time
+      const info = await (window.PAY?.getActivationInfo?.() || Promise.resolve({ active: false }));
+      const active = !!(info && info.active);
+      if (!active) {
+        const remaining = await (window.PAY?.getRemainingDailyQuota?.() || 0);
+        if (remaining <= 0) {
+          status.textContent = `免费额度已用完（每天 ${window.PAY?.FREE_DAILY_LIMIT || 5} 张）。`;
+          break;
+        }
       }
       if (fmt === 'jpeg') {
         await downloadJpeg(url, quality);
@@ -230,9 +228,9 @@ async function onDownloadClicked() {
       }
       done++;
       status.textContent = `已完成 ${done}/${urls.length}`;
-      if (!paid) {
+      if (!active) {
         // Consume one quota per image
-        remaining = await (window.PAY?.consumeQuota?.(1) || remaining - 1);
+        await (window.PAY?.consumeQuota?.(1) || Promise.resolve());
         // Reflect in pay UI if visible
         await refreshPayUI().catch(()=>{});
       }

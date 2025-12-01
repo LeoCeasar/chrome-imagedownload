@@ -208,18 +208,21 @@ async function onDownloadClicked() {
   let done = 0;
   status.textContent = `开始下载（共 ${items.length}）...`;
   document.getElementById('downloadBtn').disabled = true;
-  // Paywall: check user and free quota (only counts images)
-  let user = null;
-  let paid = false;
-  try { user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false })); } catch {}
-  paid = !!(user && user.paid);
-  let remaining = paid ? Infinity : await (window.PAY?.getRemainingDailyQuota?.() || 0);
 
   for (const it of items) {
     try {
-      if (it.kind === 'image' && !paid && remaining <= 0) {
-        status.textContent = `免费额度已用完（每天 ${window.PAY?.FREE_DAILY_LIMIT || 5} 张）。`;
-        break;
+      // Check permission each time (only counts image items)
+      let active = false;
+      if (it.kind === 'image') {
+        const info = await (window.PAY?.getActivationInfo?.() || Promise.resolve({ active: false }));
+        active = !!(info && info.active);
+        if (!active) {
+          const remaining = await (window.PAY?.getRemainingDailyQuota?.() || 0);
+          if (remaining <= 0) {
+            status.textContent = `免费额度已用完（每天 ${window.PAY?.FREE_DAILY_LIMIT || 5} 张）。`;
+            break;
+          }
+        }
       }
       if (fmt === 'jpeg' && it.kind === 'image') {
         await downloadJpeg(it.url, quality);
@@ -228,8 +231,10 @@ async function onDownloadClicked() {
       }
       done++;
       status.textContent = `已完成 ${done}/${items.length}`;
-      if (it.kind === 'image' && !paid) {
-        remaining = await (window.PAY?.consumeQuota?.(1) || remaining - 1);
+      if (it.kind === 'image') {
+        const info2 = await (window.PAY?.getActivationInfo?.() || Promise.resolve({ active: false }));
+        const active2 = !!(info2 && info2.active);
+        if (!active2) await (window.PAY?.consumeQuota?.(1) || Promise.resolve());
         await refreshPayUI().catch(()=>{});
       }
     } catch (e) { console.warn('Download failed', it, e); }

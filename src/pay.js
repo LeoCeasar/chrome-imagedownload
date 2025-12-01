@@ -81,6 +81,53 @@
     }
   }
 
+  function parseExpiry(user) {
+    if (!user || typeof user !== 'object') return null;
+    const candidates = [
+      user.expires,
+      user.expiry,
+      user.expiration,
+      user.subscriptionExpires,
+      user.subscriptionExpiration,
+      user.validUntil,
+      user.expiresAt,
+    ];
+    for (const v of candidates) {
+      if (v == null) continue;
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        // assume ms if looks like ms, else seconds
+        return v > 10_000_000_000 ? v : v * 1000;
+      }
+      if (typeof v === 'string') {
+        const t = Date.parse(v);
+        if (!Number.isNaN(t)) return t;
+      }
+    }
+    return null;
+  }
+
+  function isActivatedUser(user, nowTs = Date.now()) {
+    // Strict rule: both paid === true AND subscriptionStatus === 'active'
+    const basic = !!(user && user.paid === true && user.subscriptionStatus === 'active');
+    if (!basic) return false;
+    const exp = parseExpiry(user);
+    if (exp == null) {
+      console.debug('[ExtPay] activation has no expiry; treating as active');
+      return true;
+    }
+    const ok = nowTs < exp;
+    if (!ok) console.info('[ExtPay] activation expired at', new Date(exp).toISOString());
+    return ok;
+  }
+
+  async function getActivationInfo() {
+    const user = await getUser();
+    const active = isActivatedUser(user);
+    const expiresAt = parseExpiry(user);
+    try { console.info('[ExtPay] activation info => active =', active, 'expiresAt =', expiresAt, 'user =', user); } catch {}
+    return { active, expiresAt, user };
+  }
+
   async function broadcastLicenseChanged(user) {
     try { chrome.runtime?.sendMessage?.({ type: 'LICENSE_CHANGED', user: user || null }); } catch {}
     try { await chrome.storage?.local?.set?.({ licensePaid: !!(user && user.paid), licenseUpdatedAt: Date.now() }); } catch {}
@@ -132,6 +179,8 @@
   window.PAY = {
     getUser,
     openPaymentPage,
+    isActivatedUser,
+    getActivationInfo,
     pollForPayment,
     getRemainingDailyQuota,
     consumeQuota,
