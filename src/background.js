@@ -5,6 +5,7 @@ try {
   importScripts('config.js', 'extpay.js');
   if (typeof ExtPay === 'function' && self.APP_CONFIG && self.APP_CONFIG.EXTPAY_ID) {
     const extpay = ExtPay(self.APP_CONFIG.EXTPAY_ID);
+
     extpay.startBackground();
     console.info('[ExtPay] background started with project:', self.APP_CONFIG.EXTPAY_ID);
   } else {
