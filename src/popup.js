@@ -341,6 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg && msg.type === 'LICENSE_CHANGED') {
+        try { console.info('[UI][popup] LICENSE_CHANGED msg =', msg); } catch {}
         refreshPayUI(true).catch(()=>{});
       }
     });
@@ -516,7 +517,12 @@ async function refreshPayUI(force = false) {
   const bar = document.getElementById('payBar');
   if (!bar) return;
   let user = null;
-  try { user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false })); } catch {}
+  try {
+    user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false }));
+    try { console.info('[UI][popup] refreshPayUI user =', user); } catch {}
+  } catch (e) {
+    console.error('[UI][popup] refreshPayUI getUser failed:', e);
+  }
   const paid = !!(user && user.paid);
   if (paid) {
     bar.hidden = true;

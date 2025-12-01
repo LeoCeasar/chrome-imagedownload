@@ -16,7 +16,7 @@
       console.warn('[ExtPay] library not available in this context; using stub if present. project =', EXT_ID, 'runtime.id =', runtimeId);
     } else {
       _extpay = ExtPay(EXT_ID);
-      console.info('[ExtPay] initialized in UI context. project =', EXT_ID, 'runtime.id =', runtimeId);
+      console.info('[ExtPay] initialized in UI context. project =', EXT_ID, 'runtime.id =', runtimeId, 'isStub =', !!_extpay.__isStub);
     }
   } catch (e) {
     console.error('[ExtPay] failed to initialize ExtPay instance:', e);
@@ -59,6 +59,10 @@
     return Math.max(0, FREE_DAILY_LIMIT - next);
   }
 
+  function safeStringify(obj) {
+    try { return JSON.stringify(obj); } catch { return String(obj); }
+  }
+
   async function getUser() {
     if (!_extpay) {
       console.warn('[ExtPay] getUser() called but _extpay not initialized. project =', EXT_ID);
@@ -66,7 +70,9 @@
     }
     try {
       const user = await _extpay.getUser();
-      console.debug('[ExtPay] getUser() ->', user);
+      try {
+        console.debug('[ExtPay] getUser() -> raw:', user, 'json =', safeStringify(user));
+      } catch {}
       // user.paid indicates whether user has purchased/active subscription
       return user || { paid: false, _error: 'user_null' };
     } catch (err) {
@@ -83,9 +89,12 @@
   async function pollForPayment(timeoutMs = 180000, intervalMs = 3000) {
     const deadline = Date.now() + Math.max(0, timeoutMs);
     console.info('[ExtPay] start pollForPayment: timeout =', timeoutMs, 'interval =', intervalMs);
+    let attempt = 0;
     while (Date.now() < deadline) {
       try {
+        attempt++;
         const user = await getUser();
+        try { console.debug('[ExtPay] poll attempt #', attempt, 'user =', user); } catch {}
         if (user && user.paid) {
           console.info('[ExtPay] payment detected during polling; updating UI');
           await broadcastLicenseChanged(user);
@@ -107,7 +116,7 @@
     }
     if (_extpay && _extpay.openPaymentPage) {
       try {
-        console.info('[ExtPay] opening payment page for project =', EXT_ID);
+        console.info('[ExtPay] opening payment page for project =', EXT_ID, 'isStub =', !!_extpay.__isStub);
         _extpay.openPaymentPage();
         // Start a background poll to detect paid status while user completes checkout
         // Fire and forget; UI can also click "刷新授权" to force immediate check

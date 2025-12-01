@@ -320,7 +320,12 @@ async function start() {
   const tabId = await getActiveTabId();
   if (!tabId) return;
   try {
-    const port = chrome.tabs.connect(tabId, { name: 'media-feed' });
+    // const port = chrome.tabs.connect(tabId, { name: 'media-feed' });
+    let port = chrome.tabs.connect(tabId, { name: 'media-feed' });
+    if (chrome.runtime.lastError) {
+        console.debug('[media-feed] connect failed:', chrome.runtime.lastError.message);
+        port = null;
+    }
     port.onMessage.addListener(msg => {
       if (msg && msg.type === 'MEDIA_UPDATE') render(msg.media || []);
     });
@@ -342,6 +347,7 @@ async function start() {
   try {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg && msg.type === 'LICENSE_CHANGED') {
+        try { console.info('[UI][sidepanel] LICENSE_CHANGED msg =', msg); } catch {}
         refreshPayUI(true).catch(()=>{});
       }
     });
@@ -548,7 +554,12 @@ async function refreshPayUI(force = false) {
   const bar = document.getElementById('payBar');
   if (!bar) return;
   let user = null;
-  try { user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false })); } catch {}
+  try {
+    user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false }));
+    try { console.info('[UI][sidepanel] refreshPayUI user =', user); } catch {}
+  } catch (e) {
+    console.error('[UI][sidepanel] refreshPayUI getUser failed:', e);
+  }
   const paid = !!(user && user.paid);
   if (paid) {
     bar.hidden = true;
