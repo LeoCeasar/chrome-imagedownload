@@ -558,20 +558,38 @@ function formatBytes(bytes) {
 async function refreshPayUI(force = false) {
   const bar = document.getElementById('payBar');
   if (!bar) return;
-  let user = null;
-  try {
-    user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false }));
-    try { console.info('[UI][sidepanel] refreshPayUI user =', user); } catch {}
-  } catch (e) {
-    console.error('[UI][sidepanel] refreshPayUI getUser failed:', e);
+  const quotaText = document.getElementById('quotaText');
+  const licenseText = document.getElementById('licenseText');
+  const buyBtn = document.getElementById('buyBtn');
+  const refreshBtn = document.getElementById('refreshLicenseBtn');
+  function fmt(ts) {
+    if (!Number.isFinite(ts)) return '';
+    try { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } catch { return ''; }
   }
-  const paid = !!(user && user.paid);
-  if (paid) {
-    bar.hidden = true;
+  let info = { active: false, expiresAt: null, user: null };
+  try {
+    info = await (window.PAY?.getActivationInfo?.() || Promise.resolve(info));
+    try { console.info('[UI][sidepanel] refreshPayUI activation info =', info); } catch {}
+  } catch (e) {
+    console.error('[UI][sidepanel] refreshPayUI getActivationInfo failed:', e);
+  }
+  const active = !!(info && info.active);
+  if (active) {
+    if (licenseText) {
+      const suffix = info.expiresAt ? ` · 有效期至 ${fmt(info.expiresAt)}` : '';
+      licenseText.textContent = `已解锁${suffix}`;
+      licenseText.hidden = false;
+    }
+    if (quotaText) quotaText.hidden = true;
+    if (buyBtn) buyBtn.hidden = true;
+    if (refreshBtn) refreshBtn.hidden = false;
+    bar.hidden = false;
   } else {
     const remaining = await (window.PAY?.getRemainingDailyQuota?.() || 0);
-    const quotaText = document.getElementById('quotaText');
-    if (quotaText) quotaText.textContent = `免费额度：今日剩余 ${remaining} 张`;
+    if (quotaText) { quotaText.textContent = `免费额度：今日剩余 ${remaining} 张`; quotaText.hidden = false; }
+    if (licenseText) licenseText.hidden = true;
+    if (buyBtn) buyBtn.hidden = false;
+    if (refreshBtn) refreshBtn.hidden = false;
     bar.hidden = false;
   }
 }
