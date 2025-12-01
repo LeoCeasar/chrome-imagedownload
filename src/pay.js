@@ -1,15 +1,26 @@
 // Simple pay/quota helper used by popup and sidepanel
 // Requires (optional) global ExtPay loaded from src/extpay.js
 (function () {
-  const EXT_ID = 'od-image-downloader';
+  // Resolve ExtPay project ID strictly from config; do not silently fall back
+  const EXT_ID = (typeof window !== 'undefined' && window.APP_CONFIG?.EXTPAY_ID)
+    || (typeof self !== 'undefined' && self.APP_CONFIG?.EXTPAY_ID)
+    || null;
   const FREE_DAILY_LIMIT = 5; // 免费每天5张图片
 
   let _extpay = null;
   try {
-    if (typeof ExtPay === 'function') {
+    const runtimeId = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) ? chrome.runtime.id : '(unknown-runtime-id)';
+    if (!EXT_ID) {
+      console.error('[ExtPay] APP_CONFIG.EXTPAY_ID is missing; cannot initialize payments. runtime.id =', runtimeId);
+    } else if (typeof ExtPay !== 'function') {
+      console.warn('[ExtPay] library not available in this context; using stub if present. project =', EXT_ID, 'runtime.id =', runtimeId);
+    } else {
       _extpay = ExtPay(EXT_ID);
+      console.info('[ExtPay] initialized in UI context. project =', EXT_ID, 'runtime.id =', runtimeId, 'isStub =', !!_extpay.__isStub);
     }
-  } catch {}
+  } catch (e) {
+    console.error('[ExtPay] failed to initialize ExtPay instance:', e);
+  }
 
   function todayKey() {
     // Local date YYYY-MM-DD
@@ -48,15 +59,99 @@
     return Math.max(0, FREE_DAILY_LIMIT - next);
   }
 
+  function safeStringify(obj) {
+    try { return JSON.stringify(obj); } catch { return String(obj); }
+  }
+
   async function getUser() {
-    if (!_extpay) return { paid: false };
+    if (!_extpay) {
+      console.warn('[ExtPay] getUser() called but _extpay not initialized. project =', EXT_ID);
+      return { paid: false, _error: 'extpay_not_initialized' };
+    }
     try {
       const user = await _extpay.getUser();
+      try {
+        console.debug('[ExtPay] getUser() -> raw:', user, 'json =', safeStringify(user));
+      } catch {}
       // user.paid indicates whether user has purchased/active subscription
-      return user || { paid: false };
-    } catch {
-      return { paid: false };
+      return user || { paid: false, _error: 'user_null' };
+    } catch (err) {
+      console.error('[ExtPay] getUser() failed:', err);
+      return { paid: false, _error: String(err && err.message || err) };
     }
+  }
+
+  function parseExpiry(user) {
+    if (!user || typeof user !== 'object') return null;
+    const candidates = [
+      user.expires,
+      user.expiry,
+      user.expiration,
+      user.subscriptionExpires,
+      user.subscriptionExpiration,
+      user.validUntil,
+      user.expiresAt,
+    ];
+    for (const v of candidates) {
+      if (v == null) continue;
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        // assume ms if looks like ms, else seconds
+        return v > 10_000_000_000 ? v : v * 1000;
+      }
+      if (typeof v === 'string') {
+        const t = Date.parse(v);
+        if (!Number.isNaN(t)) return t;
+      }
+    }
+    return null;
+  }
+
+  function isActivatedUser(user, nowTs = Date.now()) {
+    // Strict rule: both paid === true AND subscriptionStatus === 'active'
+    const basic = !!(user && user.paid === true && user.subscriptionStatus === 'active');
+    if (!basic) return false;
+    const exp = parseExpiry(user);
+    if (exp == null) {
+      console.debug('[ExtPay] activation has no expiry; treating as active');
+      return true;
+    }
+    const ok = nowTs < exp;
+    if (!ok) console.info('[ExtPay] activation expired at', new Date(exp).toISOString());
+    return ok;
+  }
+
+  async function getActivationInfo() {
+    const user = await getUser();
+    const active = isActivatedUser(user);
+    const expiresAt = parseExpiry(user);
+    try { console.info('[ExtPay] activation info => active =', active, 'expiresAt =', expiresAt, 'user =', user); } catch {}
+    return { active, expiresAt, user };
+  }
+
+  async function broadcastLicenseChanged(user) {
+    try { chrome.runtime?.sendMessage?.({ type: 'LICENSE_CHANGED', user: user || null }); } catch {}
+    try { await chrome.storage?.local?.set?.({ licensePaid: !!(user && user.paid), licenseUpdatedAt: Date.now() }); } catch {}
+  }
+
+  async function pollForPayment(timeoutMs = 180000, intervalMs = 3000) {
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    console.info('[ExtPay] start pollForPayment: timeout =', timeoutMs, 'interval =', intervalMs);
+    let attempt = 0;
+    while (Date.now() < deadline) {
+      try {
+        attempt++;
+        const user = await getUser();
+        try { console.debug('[ExtPay] poll attempt #', attempt, 'user =', user); } catch {}
+        if (user && user.paid) {
+          console.info('[ExtPay] payment detected during polling; updating UI');
+          await broadcastLicenseChanged(user);
+          return true;
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, Math.max(500, intervalMs)));
+    }
+    console.warn('[ExtPay] polling ended without detecting paid status');
+    return false;
   }
 
   function openPaymentPage() {
@@ -67,7 +162,15 @@
       return;
     }
     if (_extpay && _extpay.openPaymentPage) {
-      try { _extpay.openPaymentPage(); } catch {}
+      try {
+        console.info('[ExtPay] opening payment page for project =', EXT_ID, 'isStub =', !!_extpay.__isStub);
+        _extpay.openPaymentPage();
+        // Start a background poll to detect paid status while user completes checkout
+        // Fire and forget; UI can also click "刷新授权" to force immediate check
+        pollForPayment().catch(()=>{});
+      } catch (e) {
+        console.error('[ExtPay] openPaymentPage failed:', e);
+      }
       return;
     }
     alert('支付模块暂不可用，请稍后再试');
@@ -76,6 +179,9 @@
   window.PAY = {
     getUser,
     openPaymentPage,
+    isActivatedUser,
+    getActivationInfo,
+    pollForPayment,
     getRemainingDailyQuota,
     consumeQuota,
     FREE_DAILY_LIMIT

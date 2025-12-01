@@ -208,18 +208,21 @@ async function onDownloadClicked() {
   let done = 0;
   status.textContent = `开始下载（共 ${items.length}）...`;
   document.getElementById('downloadBtn').disabled = true;
-  // Paywall: check user and free quota (only counts images)
-  let user = null;
-  let paid = false;
-  try { user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false })); } catch {}
-  paid = !!(user && user.paid);
-  let remaining = paid ? Infinity : await (window.PAY?.getRemainingDailyQuota?.() || 0);
 
   for (const it of items) {
     try {
-      if (it.kind === 'image' && !paid && remaining <= 0) {
-        status.textContent = `免费额度已用完（每天 ${window.PAY?.FREE_DAILY_LIMIT || 5} 张）。`;
-        break;
+      // Check permission each time (only counts image items)
+      let active = false;
+      if (it.kind === 'image') {
+        const info = await (window.PAY?.getActivationInfo?.() || Promise.resolve({ active: false }));
+        active = !!(info && info.active);
+        if (!active) {
+          const remaining = await (window.PAY?.getRemainingDailyQuota?.() || 0);
+          if (remaining <= 0) {
+            status.textContent = `免费额度已用完（每天 ${window.PAY?.FREE_DAILY_LIMIT || 5} 张）。`;
+            break;
+          }
+        }
       }
       if (fmt === 'jpeg' && it.kind === 'image') {
         await downloadJpeg(it.url, quality);
@@ -228,8 +231,10 @@ async function onDownloadClicked() {
       }
       done++;
       status.textContent = `已完成 ${done}/${items.length}`;
-      if (it.kind === 'image' && !paid) {
-        remaining = await (window.PAY?.consumeQuota?.(1) || remaining - 1);
+      if (it.kind === 'image') {
+        const info2 = await (window.PAY?.getActivationInfo?.() || Promise.resolve({ active: false }));
+        const active2 = !!(info2 && info2.active);
+        if (!active2) await (window.PAY?.consumeQuota?.(1) || Promise.resolve());
         await refreshPayUI().catch(()=>{});
       }
     } catch (e) { console.warn('Download failed', it, e); }
@@ -320,7 +325,12 @@ async function start() {
   const tabId = await getActiveTabId();
   if (!tabId) return;
   try {
-    const port = chrome.tabs.connect(tabId, { name: 'media-feed' });
+    // const port = chrome.tabs.connect(tabId, { name: 'media-feed' });
+    let port = chrome.tabs.connect(tabId, { name: 'media-feed' });
+    if (chrome.runtime.lastError) {
+        console.debug('[media-feed] connect failed:', chrome.runtime.lastError.message);
+        port = null;
+    }
     port.onMessage.addListener(msg => {
       if (msg && msg.type === 'MEDIA_UPDATE') render(msg.media || []);
     });
@@ -333,8 +343,20 @@ async function start() {
   await refreshPayUI();
   document.getElementById('buyBtn')?.addEventListener('click', () => window.PAY?.openPaymentPage?.());
   document.getElementById('refreshLicenseBtn')?.addEventListener('click', async () => {
-    try { await refreshPayUI(true); } catch {}
+    try {
+      await (window.PAY?.pollForPayment?.(60000, 2000) || Promise.resolve());
+      await refreshPayUI(true);
+    } catch {}
   });
+  // React to license changes broadcast by PAY
+  try {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === 'LICENSE_CHANGED') {
+        try { console.info('[UI][sidepanel] LICENSE_CHANGED msg =', msg); } catch {}
+        refreshPayUI(true).catch(()=>{});
+      }
+    });
+  } catch {}
 }
 
 document.addEventListener('DOMContentLoaded', start);
@@ -536,15 +558,38 @@ function formatBytes(bytes) {
 async function refreshPayUI(force = false) {
   const bar = document.getElementById('payBar');
   if (!bar) return;
-  let user = null;
-  try { user = await (window.PAY?.getUser?.() || Promise.resolve({ paid: false })); } catch {}
-  const paid = !!(user && user.paid);
-  if (paid) {
-    bar.hidden = true;
+  const quotaText = document.getElementById('quotaText');
+  const licenseText = document.getElementById('licenseText');
+  const buyBtn = document.getElementById('buyBtn');
+  const refreshBtn = document.getElementById('refreshLicenseBtn');
+  function fmt(ts) {
+    if (!Number.isFinite(ts)) return '';
+    try { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; } catch { return ''; }
+  }
+  let info = { active: false, expiresAt: null, user: null };
+  try {
+    info = await (window.PAY?.getActivationInfo?.() || Promise.resolve(info));
+    try { console.info('[UI][sidepanel] refreshPayUI activation info =', info); } catch {}
+  } catch (e) {
+    console.error('[UI][sidepanel] refreshPayUI getActivationInfo failed:', e);
+  }
+  const active = !!(info && info.active);
+  if (active) {
+    if (licenseText) {
+      const suffix = info.expiresAt ? ` · 有效期至 ${fmt(info.expiresAt)}` : '';
+      licenseText.textContent = `已解锁${suffix}`;
+      licenseText.hidden = false;
+    }
+    if (quotaText) quotaText.hidden = true;
+    if (buyBtn) buyBtn.hidden = true;
+    if (refreshBtn) refreshBtn.hidden = false;
+    bar.hidden = false;
   } else {
     const remaining = await (window.PAY?.getRemainingDailyQuota?.() || 0);
-    const quotaText = document.getElementById('quotaText');
-    if (quotaText) quotaText.textContent = `免费额度：今日剩余 ${remaining} 张`;
+    if (quotaText) { quotaText.textContent = `免费额度：今日剩余 ${remaining} 张`; quotaText.hidden = false; }
+    if (licenseText) licenseText.hidden = true;
+    if (buyBtn) buyBtn.hidden = false;
+    if (refreshBtn) refreshBtn.hidden = false;
     bar.hidden = false;
   }
 }
